@@ -1,296 +1,206 @@
-# AMD XDNA™️ Driver for Linux®️
-This repository is for the AMD XDNA™️ Driver (amdxdna.ko) for Linux®️ and XRT SHIM library development.
+# AMD XDNA™ Driver for Fedora Linux
+
+**Fedora x86_64 fork** of the [AMD xdna-driver](https://github.com/amd/xdna-driver) tree.
+This repository builds the `amdxdna` kernel module, XRT SHIM libraries, and an installable
+**RPM** plugin package for Fedora using the upstream `build/build.sh` path.
+
+> **Not Ubuntu or Arch.** For Debian/Ubuntu `.deb` or Arch `PKGBUILD` workflows, use
+> [amd/xdna-driver](https://github.com/amd/xdna-driver) upstream. This fork targets
+> **Fedora and RHEL-family** systems only.
+
+**Full build/install guide:** [FEDORA.md](FEDORA.md)
+
+| Branch | Purpose |
+|--------|---------|
+| `fedora/stock-fc44` | Frozen stock baseline (recommended for builds) |
+| `fedora/compat` | Active Fedora compatibility fixes |
+| `main` | AMD upstream mirror — do not patch here |
+| `carbon/base-2026-07-25` | Frozen AMD reference pin |
+
+Fork: https://github.com/IzzieBoopers/xdna-driver
+
+---
 
 ## Table of Contents
+
 - [Introduction](#introduction)
 - [System Requirements](#system-requirements)
-- [Linux compilation and installation](#linux-compilation-and-installation)
-- [Clone](#clone)
-- [Build](#build)
+- [Quick Start](#quick-start)
+- [Driver Trees](#driver-trees)
 - [Test](#test)
 - [Q&A](#qa)
+- [Upstream and Branches](#upstream-and-branches)
 - [Contributor Guidelines](#contributor-guidelines)
 
 ## Introduction
-This repository is for supporting XRT on AMD XDNA devices. From this repository, you can build a XRT plugin DEB package.
-On a machine with XDNA device, with both XRT and XRT plugin packages installed, user can start using XDNA device on Linux.
+
+This repository supports XRT on AMD XDNA / NPU devices on **Fedora Linux**. With XRT base
+packages and the plugin RPM installed, applications can use the NPU through the standard
+XRT runtime (`/opt/xilinx/xrt`).
+
+The release build produces:
+
+- `xrt_plugin.*_amdxdna.rpm` — SHIM libraries, firmware, and DKMS driver sources
+- `amdxdna.ko` — primary upstream kernel module (packaged via DKMS in the RPM)
 
 ## System Requirements
-To run AI applications, your system needs
-* Processor:
-  - To run AI applications (test machine): RyzenAI processor
-  - To build this repository (build machine): Any x86 processors, but recommend AMD processor :wink:
-* Operating System:
-  - Ubuntu >= 22.04
-  - Arch Linux
-* Linux Kernel: v6.10 or above. (See [Linux compilation and installation](#linux-compilation-and-installation))
-  - Due to Linux API change, XDNA driver doesn't always keep supporting old version.
-* Installed XRT base package (or you can install it along the
-  following recipe)
-  - To make sure the XRT base package works with the plug-in package, better build it from `xrt` submodule in this repo (`<root-of-source-tree>/xrt`)
-  - Refer to https://github.com/Xilinx/XRT for more detailed information.
 
-## Linux compilation and installation
+**Hardware**
 
-### Ubuntu 25.04
+- NPU host: AMD Ryzen AI (or other supported XDNA device)
+- Build machine: x86_64 (any modern CPU; AMD recommended)
 
-Ubuntu 25.04 includes [Linux kernel 6.14](https://kernelnewbies.org/Linux_6.14) that incorporates the amdxdna driver for AMD NPUs :partying_face:. 
+**Software**
 
-> The XRT SHIM library is still needed from this repository.
+- **Fedora** x86_64 (tested on Fedora 44; RHEL-family RPM path also supported)
+- **Linux kernel** ≥ 6.10 with `CONFIG_DRM_ACCEL` and `CONFIG_AMD_IOMMU`
+- **XRT base** — `xrt-base` and `xrt-npu` RPMs matching the XRT submodule in this tree
+- **Build tools** — see [FEDORA.md](FEDORA.md) for the full `dnf install` list
 
-### Ubuntu 24.10
+Fedora 44+ ships a suitable kernel in the default repos. Ensure
+`kernel-devel-$(uname -r)` matches your running kernel before building the module.
 
-Ubuntu 24.10 includes Linux kernel 6.11 that meets the requirements for the xdna-driver. 
+## Quick Start
 
-### Ubuntu 24.04
+```bash
+git clone --recurse-submodules https://github.com/IzzieBoopers/xdna-driver.git
+cd xdna-driver
+git switch fedora/stock-fc44
 
-If you are using Ubuntu 24.04 you may need to update the Linux kernel. You can update to Linux 6.11 by installing the Hardware Enablement (HWE) stack:
-
-  ```bash
-  sudo apt update 
-  sudo apt install --install-recommends linux-generic-hwe-24.04
-  sudo reboot
-  ```
-
-### Ubuntu 22.04
-
-Since Linux v6.10 officially supports AMD IOMMU SVA, we can work with upstream Linux kernel source.
-If your system has Linux v6.10 or above installed, check if `CONFIG_AMD_IOMMU` and `CONFIG_DRM_ACCEL` are set. If not, the system is not good for XDNA driver.
-
-If you want to manually build Linux kernel, follow below steps.
-```  bash
-# Assuming you have knowledge of kernel compilation,
-# this is just refreshing up a few key points.
-
-# Clone Linux source code from your favorite repository, for example
-git clone --depth=1 --branch v6.10 git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
-
-# Usually, when people compile kernel from source code, they use current config
-cp /boot/config-`uname -r` <your_build_dir>/.config   # (Option step, if you know how to do it better)
-# Open <your_build_dir>/.config and add "CONFIG_DRM_ACCEL=y" #Required by XDNA Driver
-# Or run instead
-scripts/config --file .config --enable DRM_ACCEL
-scripts/config --file .config --enable AMD_IOMMU # Option step, if you know this is not set
-
-# Use below command to build kernel packages. Once build is done, DEB packages are at the parent directory of <your_build_dir>
-make -j `nproc` bindeb-pkg
-# The exact names will depend on your configuration
-sudo apt reinstall ../linux-headers-6.10.0_6.10.0-1_amd64.deb ../linux-image-6.10.0_6.10.0-1_amd64.deb ../linux-libc-dev_6.10.0-1_amd64.deb
-```
-
-## Clone
-
-```
-git clone git@github.com:amd/xdna-driver.git
-cd <root-of-source-tree>
-# get code for submodules
 git submodule update --init --recursive
-```
-
-## Build
-
-### Prerequisite
-
-* If this is your first time building this module,
-  follow below steps to resolve the dependencies (or at least look at
-  the file content if you're not on a distro with apt-get)
-``` bash
-#requires root permissions to run the script
-sudo su
-cd <root-of-source-tree>
-./tools/amdxdna_deps.sh
-# exit from root
-exit
-```
-
-### Steps to create release build DEB package (Ubuntu/Debian):
-
-``` bash
-cd <root-of-source-tree>/build
-
-# If you do not have XRT installed yet:
-cd xrt/build
-./build.sh -npu -opt
-# To adapt according to your OS & version
-sudo apt reinstall ./Release/xrt_202510.2.19.0_22.04-amd64-base.deb
-cd ../../build
-
-# Start XDNA driver release build and create release DEB package
+cd build
 ./build.sh -release
 
-# To adapt according to your OS & version
-sudo apt reinstall ./Release/xrt_plugin.2.19.0_ubuntu22.04-x86_64-amdxdna.deb
+sudo dnf install -y ./Release/xrt_plugin.*_amdxdna.rpm
 ```
 
-### Steps to create release build packages (Arch Linux):
+Install matching XRT base RPMs first if needed (build from the `xrt/` submodule or use
+packages already on your system — versions must align). See [FEDORA.md](FEDORA.md).
 
-``` bash
-cd <root-of-source-tree>
+**Runtime setup** (group membership, memlock limits): also in [FEDORA.md](FEDORA.md).
 
-# Install dependencies (requires sudo)
-sudo ./tools/amdxdna_deps.sh
+## Driver Trees
 
-# Get submodules
-git submodule update --init --recursive
+This repository contains **two** independent driver source trees:
 
-# Build XRT
-cd xrt/build
-./build.sh -npu -opt
+| Path | Role |
+|------|------|
+| `drivers/accel/amdxdna/` | **Primary** upstream (staging) driver — built into the RPM/DKMS as `amdxdna.ko` |
+| `src/driver/amdxdna/` | Legacy out-of-tree copy — built as `amdxdna_legacy.ko` for compatibility |
 
-# Build and install XRT packages using pacman
-# PKGBUILDs are in xrt/build/arch/
-cd arch
-makepkg -p PKGBUILD-xrt-base
-sudo pacman -U xrt-base-*.pkg.tar.zst
+`./build.sh -release` builds **both** modules. The RPM installs the upstream tree via DKMS.
+See `./build.sh -h` for flags that swap which module ships as primary `amdxdna.ko`.
 
-makepkg -p PKGBUILD-xrt-npu
-sudo pacman -U xrt-npu-*.pkg.tar.zst
+The RPM also ships:
 
-# Build XDNA driver
-cd ../../../build
-./build.sh -release
-
-# Build and install the AMDXDNA driver first (separate package for the
-# DKMS-based kernel module). The plugin depends on this package, so it
-# must be installed before the plugin.
-cd arch
-makepkg -p PKGBUILD-amdxdna-driver
-sudo pacman -U amdxdna-driver-*.pkg.tar.zst
-
-# Build and install the XDNA plugin package
-makepkg -p PKGBUILD-xrt-plugin-amdxdna
-sudo pacman -U xrt-plugin-amdxdna-*.pkg.tar.zst
-
-# Configure memory limits (required for NPU access)
-# Using limits.d drop-in file (survives package upgrades)
-sudo mkdir -p /etc/security/limits.d
-sudo tee /etc/security/limits.d/99-amdxdna.conf > /dev/null << 'EOF'
-* soft memlock unlimited
-* hard memlock unlimited
-EOF
-
-# Log out and log back in (or reboot) for memory limit changes to take effect
-```
-
-**Note for Arch Linux users**: The build system generates `.tar.gz` packages which are repackaged into proper Arch packages (`.pkg.tar.zst`) using the provided PKGBUILDs:
-- XRT packages: `xrt/build/arch/` (PKGBUILD-xrt-base, PKGBUILD-xrt-npu)
-- AMDXDNA driver: `build/arch/` (PKGBUILD-amdxdna-driver)
-- XDNA plugin: `build/arch/` (PKGBUILD-xrt-plugin-amdxdna)
-
-This ensures proper integration with pacman for installation, upgrades, and removal.
-
-### Default driver in the plugin package
-
-This repository contains **two** independent driver source trees for the
-AMD XDNA NPU:
-
-* `drivers/accel/amdxdna/` — the upstream (staging) driver, mirrored
-  from the same path in the Linux kernel tree and being upstreamed.
-* `src/driver/amdxdna/` — the out-of-tree (OOT, also referred to as
-  "legacy") driver. Maintained here for compatibility and bring-up.
-
-`./build.sh -release` always builds **both** trees and packages the
-resulting kernel modules into the plugin DEB:
-
-* `amdxdna.ko` — built from the upstream (staging) tree. This is the
-  primary driver: DKMS compiles it on install and `modprobe` loads it
-  automatically.
-* `amdxdna_legacy.ko` — built from the out-of-tree (OOT) tree, installed
-  alongside `amdxdna.ko` for compatibility and bring-up.
-
-See `./build.sh -h` for the flags that swap which module ships as the
-primary `amdxdna.ko`.
-
-You will find `xrt_plugin.<version>_<distro-version>-<arch>-amdxdna.deb` (Ubuntu/Debian) or `xrt_plugin.<version>_-<arch>-amdxdna.tar.gz` (Arch Linux) in the `Release/` folder. This package includes:
-* The `.so` library files, which will be installed into `/opt/xilinx/xrt/lib` folder
-* The XDNA driver source and DKMS script that build, install, and load the
-  primary `amdxdna.ko` on the target machine. A second module,
-  `amdxdna_legacy.ko`, is also shipped for compatibility (see
-  [Default driver in the plugin package](#default-driver-in-the-plugin-package)
-  for how to swap them).
-* The firmware binary files, which will be installed to `/usr/lib/firmware/amdnpu` folder
+- `.so` libraries under `/opt/xilinx/xrt/lib64`
+- NPU firmware under `/usr/lib/firmware/amdnpu/`
+- DKMS scripts to build and load the kernel module on install
 
 ## Test
 
-If you haven't read [System Requirements](#system-requirements), double check it.
-
-``` bash
-source /opt/xilinx/xrt/setup.sh
+```bash
+source /opt/xilinx/xrt/setup.sh   # if not already in your environment
+xrt-smi examine
 xrt-smi validate
+lsmod | grep amdxdna
+modinfo amdxdna
 ```
 
 ## Q&A
 
-### Q: I want to debug my application, how to build library with `-g`?
+### Q: I want to debug my application — how do I build with `-g`?
 
-A: We have debug version of library, which is compiled with `-g` option. You can run `./build.sh -debug` or `./build.sh` which should also create debug DEB package.
+Run `./build.sh -debug` (or plain `./build.sh`) to produce a debug RPM alongside the
+release build.
 
-### Q: I'm developing amdxdna.ko driver module. How to enable XDNA_DBG() print?
+### Q: I'm developing `amdxdna.ko`. How do I enable `XDNA_DBG()` print?
 
-A: XDNA_DBG() relies on Linux's CONFIG_DYNAMIC_DEBUG framework, see Linux's [dynamic debug howto page](https://www.kernel.org/doc/html/v6.8/admin-guide/dynamic-debug-howto.html) for details.
-TL;DR, run `sudo insmod amdxdna.ko dyndbg=+pf` to enable XDNA_DBG() globally, where +pf means enable debug printing and print the function name.
+`XDNA_DBG()` uses Linux `CONFIG_DYNAMIC_DEBUG`. See the
+[kernel dynamic debug howto](https://www.kernel.org/doc/html/latest/admin-guide/dynamic-debug-howto.html).
 
-### Q: When install XRT plugin DEB package, apt-get/dpkg tool failed. What to do next?
-
-A: Create a debug DEB package, see above question. Then install debug DEB package in your environment. This time, you will have more verbose log. Share this log with us.
-
-### Q: Can I use NPU for accelerate ML training?
-
-A: You can use NPU to accelerate ML inference. But NPU is not designed for ML training.
-
-### Q: How to allocate huge size BO?
-
-A: There is no limit for BO size from the XRT and NPU device.
-An application can fail to allocate a huge BO, once it hits the Linux resource limit.
-In our test, the "max locked memory" is the key. You can follow below steps to check and change configure.
-``` bash
-ulimit -l # The result is in kbytes
-
-# Create a drop-in file in /etc/security/limits.d/ (survives package upgrades)
-sudo mkdir -p /etc/security/limits.d
-sudo tee /etc/security/limits.d/99-amdxdna.conf > /dev/null << 'EOF'
-* soft memlock <max-size-in-kbytes>
-* hard memlock <max-size-in-kbytes>
-EOF
-# Use "unlimited" instead of a numeric value if unsure
-
-# Log out and log back in (or reboot), then check if the limit changed
-ulimit -l
+```bash
+sudo modprobe amdxdna dyndbg=+pf
 ```
 
-### Q: `xrt-smi` enumerates the NPU, but commands abort (`ERT_CMD_STATE_ABORT`) or the mailbox times out right after load. What's wrong?
+### Q: `dnf install` of the plugin RPM failed. What next?
 
-A: This is almost always a **firmware/driver version mismatch** — a stale NPU firmware
-(`npu.sbin`) left over from a previous or distro install does not match the loaded `amdxdna.ko`.
-The plugin package ships the matching firmware to `/usr/lib/firmware/amdnpu/<device>/`; make sure
-that copy is the one in use (re-install the plugin package, or remove a stale firmware you placed
-by hand), then reload the driver. Mixing a firmware version from one source with a driver from
-another is the common cause of post-load command aborts.
+Build a debug RPM (`./build.sh -debug`), retry install, and capture the full `dnf`/`rpm`
+output. DKMS build failures usually mean `kernel-devel-$(uname -r)` is missing or mismatched.
 
-### Q: The device enumerates, but telemetry/array queries fail with "Operation not supported" or `EINVAL` (e.g. `GET_ARRAY`, `QUERY_TELEMETRY`). Why?
+### Q: Can I use the NPU to accelerate ML training?
 
-A: Your XRT/plugin is newer than the loaded kernel driver. A distro **in-tree** `amdxdna` can
-predate ioctls that the current XRT SHIM issues, so those calls return `EOPNOTSUPP`/`EINVAL` while
-basic BO/exec paths still work. Use the driver built and shipped from this repo (the staging
-`amdxdna.ko` — see [Default driver in the plugin package](#default-driver-in-the-plugin-package)),
-which implements the matching ioctls, rather than an older in-tree module.
+The NPU is designed for **inference**, not training.
+
+### Q: How do I allocate huge buffer objects?
+
+There is no BO size limit from XRT itself; Linux ulimits can block large allocations.
+Check and raise memlock:
+
+```bash
+ulimit -l    # kbytes
+
+sudo mkdir -p /etc/security/limits.d
+sudo tee /etc/security/limits.d/99-amdxdna.conf > /dev/null <<'EOF'
+* soft memlock unlimited
+* hard memlock unlimited
+EOF
+# Log out and back in, then re-check: ulimit -l
+```
+
+### Q: `xrt-smi` sees the NPU but commands abort or the mailbox times out?
+
+Usually a **firmware/driver version mismatch**. Re-install the plugin RPM so firmware under
+`/usr/lib/firmware/amdnpu/` matches the loaded `amdxdna.ko`, then reload the driver.
+
+### Q: Telemetry or array queries return `EOPNOTSUPP` / `EINVAL`?
+
+Your XRT/plugin may be newer than an older in-tree `amdxdna`. Install the driver from this
+repo's RPM (upstream staging `amdxdna.ko`) rather than a stale distro kernel module.
+
+## Upstream and Branches
+
+```text
+amd/xdna-driver (upstream)
+        │
+fork main ─────────────── AMD mirror (sync only)
+        │
+carbon/base-2026-07-25 ── frozen AMD pin
+        │
+fedora/compat ─────────── Fedora fixes
+        │
+fedora/stock-fc44 ─────── frozen Fedora stock (build from here)
+```
+
+Carbon kernel enhancements live in a **separate repository** (`The_Iridium_Road/carbon/`),
+not in this fork. This tree ships **stock** `amdxdna` only.
+
+To sync with AMD upstream `main`:
+
+```bash
+git switch main
+git fetch upstream
+git reset --hard upstream/main
+git submodule update --init --recursive
+```
+
+Merge AMD changes into `fedora/compat` deliberately when rebasing Fedora fixes.
 
 ## Contributor Guidelines
-1. Read [Getting Started](#getting-started)
-2. Read [System Requirements](#system-requirements)
-3. Run Linux checkpatch.pl before commit and create pull request, see [Checkpatch](#checkpatch)
+
+1. Read [FEDORA.md](FEDORA.md) and [System Requirements](#system-requirements)
+2. Put Fedora-only changes on `fedora/compat` (then freeze to `fedora/stock-fc44` when validated)
+3. Do **not** commit Fedora patches to `main` (AMD mirror) or frozen stock branches
+4. Run Linux `checkpatch.pl` before commit — see [Checkpatch](#checkpatch)
 
 ### Checkpatch
-* There is a pre-commit script to run checkpatch.pl automatically.
-``` bash
-# How to setup the auto pre-commit check
-cd <workspace of this repo>/
+
+```bash
 cp tools/pre-commit .git/hooks/
 ```
-`git commit` will reject the commit if error/warning is found, until you make `checkpatch.pl` happy.
 
-* There is shell script that scan all the source code in a folder
-``` bash
-cd <workspace of this repo>/
+`git commit` rejects commits until checkpatch passes.
+
+```bash
 ./tools/codingsty_check.sh <DIR>
 ```

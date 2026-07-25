@@ -12,8 +12,8 @@ Usage: build.sh [options]
 Options:
   -help                    Display this help
   -clean                   Clean build directory
-  -debug                   Debug build and generate .deb package
-  -release                 Release build and generate .deb package
+  -debug                   Debug build and generate RPM package (Fedora/RHEL)
+  -release                 Release build and generate RPM package (Fedora/RHEL)
   -j <n>                   Compile parallel (default: num of CPUs)
   -nocmake                 Do not regenerate cmake files
   -install_prefix <path>   Set CMAKE_INSTALL_PREFIX to path
