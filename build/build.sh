@@ -323,17 +323,23 @@ BUILD_DIR=$(readlink -f $(dirname ${BASH_SOURCE[0]}))
 DEBUG_BUILD_TYPE=Debug
 RELEASE_BUILD_TYPE=Release
 CMAKE=cmake
-CMAKE_MAJOR_VERSION=`cmake --version | head -n 1 | awk '{print $3}' |awk -F. '{print $1}'`
+CMAKE_VERSION_STRING=`cmake --version | head -n 1 | awk '{print $3}'`
+CMAKE_MAJOR_VERSION=`echo "${CMAKE_VERSION_STRING}" | awk -F. '{print $1}'`
+CMAKE_MINOR_VERSION=`echo "${CMAKE_VERSION_STRING}" | awk -F. '{print $2}'`
 cmake_extra_flags=""
 DOWNLOAD_BINS_DIR=./amdxdna_bins
 XBUTIL_VALIDATE_BINS_DIR=$DOWNLOAD_BINS_DIR/download_raw/xbutil_validate/bins
 
-# Sanity check
-if [[ $CMAKE_MAJOR_VERSION != 3 ]]; then
+# Sanity check: use cmake when it meets project minimum (3.19+). Legacy RHEL/CentOS
+# may ship cmake 2.x as `cmake` and cmake3 as the real CMake 3.x binary.
+# Fedora 40+ ships cmake 4.x as `cmake` only — do not require cmake3.
+if [[ $CMAKE_MAJOR_VERSION -lt 3 ]] || [[ $CMAKE_MAJOR_VERSION -eq 3 && $CMAKE_MINOR_VERSION -lt 19 ]]; then
     if [[ $OSDIST == "centos" ]] || [[ $OSDIST == "amzn" ]] || [[ $OSDIST == "rhel" ]] || [[ $OSDIST == "fedora" ]]; then
-        CMAKE=cmake3
+        if command -v cmake3 &>/dev/null; then
+            CMAKE=cmake3
+        fi
         if [[ ! -x "$(command -v $CMAKE)" ]]; then
-            echo "$CMAKE is not installed"
+            echo "CMake 3.19+ required; neither cmake nor cmake3 is suitable (found ${CMAKE_VERSION_STRING})"
             exit 1
         fi
     fi
