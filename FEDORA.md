@@ -155,5 +155,13 @@ and `xrt-smi examine` output.
 **Command abort / mailbox timeout after install** — firmware/driver mismatch. Re-install the
 plugin RPM and reload: `sudo modprobe -r amdxdna && sudo modprobe amdxdna`.
 
+**NPU missing after upgrading an existing plugin RPM** — RPM scriptlet ordering can leave
+DKMS unregistered. Re-run DKMS install and load:
+
+```bash
+sudo /opt/xilinx/xrt/share/amdxdna/dkms_driver.sh --install
+sudo modprobe amdxdna
+```
+
 **Telemetry ioctls fail with `EINVAL`** — loaded driver is older than XRT SHIM. Install
 this repo's RPM rather than a stale in-tree kernel module.
